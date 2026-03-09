@@ -435,9 +435,12 @@ class TestCreateMount:
 
 class TestBackwardCompat:
     def test_build_mcp_ui_routes_still_works(self):
+        import warnings
         from mcp_embedded_ui import build_mcp_ui_routes
 
-        routes = build_mcp_ui_routes(TOOLS, fake_handler)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            routes = build_mcp_ui_routes(TOOLS, fake_handler)
         client = TestClient(Mount("/", routes=routes))
         assert client.get("/tools").status_code == 200
 

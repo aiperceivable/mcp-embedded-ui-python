@@ -158,6 +158,20 @@ Auth only guards `POST /tools/{name}/call`. Discovery endpoints (`GET /tools`, `
 | GET | `/tools/{name}` | Full tool detail with `inputSchema` |
 | POST | `/tools/{name}/call` | Execute a tool, returns MCP `CallToolResult` |
 
+## Development
+
+```bash
+# Install in editable mode with dev dependencies
+pip install -e ".[dev]"
+
+# Run the demo
+python examples/fastapi_demo.py
+# Visit http://localhost:8000/explorer/
+
+# Run tests
+pytest
+```
+
 ## Cross-Language Specification
 
 This package implements the [mcp-embedded-ui](https://github.com/aipartnerup/mcp-embedded-ui) specification. The spec repo contains:

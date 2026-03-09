@@ -1,3 +1,6 @@
+
+from importlib.metadata import PackageNotFoundError, version
+
 from .server import (
     AuthHook,
     CallResult,
@@ -8,6 +11,11 @@ from .server import (
     create_app,
     create_mount,
 )
+
+try:
+    __version__ = version("mcp-embedded-ui")
+except PackageNotFoundError:
+    __version__ = "unknown"
 
 __all__ = [
     "AuthHook",

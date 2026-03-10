@@ -8,7 +8,6 @@ from typing import Any
 from starlette.routing import Mount
 from starlette.testclient import TestClient
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -422,8 +421,9 @@ class TestCreateMount:
         assert isinstance(mount, Mount)
 
     def test_create_mount_default_prefix(self):
-        from mcp_embedded_ui import create_mount
         from starlette.applications import Starlette
+
+        from mcp_embedded_ui import create_mount
 
         mount = create_mount(tools=TOOLS, handle_call=fake_handler)
         app = Starlette(routes=[mount])
@@ -436,8 +436,9 @@ class TestCreateMount:
         assert resp.status_code == 200
 
     def test_create_mount_works_in_starlette(self):
-        from mcp_embedded_ui import create_mount
         from starlette.applications import Starlette
+
+        from mcp_embedded_ui import create_mount
 
         mount = create_mount("/ui", tools=TOOLS, handle_call=fake_handler, title="Mounted")
         app = Starlette(routes=[mount])
@@ -463,6 +464,7 @@ class TestCreateMount:
 class TestBackwardCompat:
     def test_build_mcp_ui_routes_still_works(self):
         import warnings
+
         from mcp_embedded_ui import build_mcp_ui_routes
 
         with warnings.catch_warnings():
@@ -473,6 +475,7 @@ class TestBackwardCompat:
 
     def test_build_mcp_ui_routes_emits_deprecation_warning(self):
         import warnings
+
         from mcp_embedded_ui import build_mcp_ui_routes
 
         with warnings.catch_warnings(record=True) as w:

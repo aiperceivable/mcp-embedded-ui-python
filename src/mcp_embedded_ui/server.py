@@ -5,8 +5,9 @@ from __future__ import annotations
 import inspect
 import logging
 import warnings
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
-from typing import Any, Awaitable, Callable, TypedDict, Union
+from typing import Any, TypedDict
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -36,20 +37,20 @@ _ToolCallHandler2 = Callable[[str, dict[str, Any]], _ToolCallResult]
 # 3-param: (name, args, request) -> result
 _ToolCallHandler3 = Callable[[str, dict[str, Any], Request], _ToolCallResult]
 
-ToolCallHandler = Union[_ToolCallHandler2, _ToolCallHandler3]
+ToolCallHandler = _ToolCallHandler2 | _ToolCallHandler3
 
 # Auth hook can return either a sync or async context manager
 AuthHook = Callable[
     [Request],
-    Union[AbstractContextManager[Any], AbstractAsyncContextManager[Any]],
+    AbstractContextManager[Any] | AbstractAsyncContextManager[Any],
 ]
 
 # Tools can be a static list, a sync callable, or an async callable
-ToolsProvider = Union[
-    list[Any],
-    Callable[[], list[Any]],
-    Callable[[], Awaitable[list[Any]]],
-]
+ToolsProvider = (
+    list[Any]
+    | Callable[[], list[Any]]
+    | Callable[[], Awaitable[list[Any]]]
+)
 
 
 # ---------------------------------------------------------------------------

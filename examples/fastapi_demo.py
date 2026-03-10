@@ -1,6 +1,7 @@
+from contextlib import contextmanager
+
 import uvicorn
 from fastapi import FastAPI, Request
-from contextlib import contextmanager
 
 from mcp_embedded_ui import create_mount
 

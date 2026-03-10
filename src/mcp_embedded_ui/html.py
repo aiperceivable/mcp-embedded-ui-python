@@ -14,7 +14,10 @@ def _build_project_link(project_name: str | None, project_url: str | None) -> st
     name = escape(project_name or "")
     if project_url:
         url = escape(project_url, quote=True)
-        return f' &middot; <a href="{url}" style="color:#888;text-decoration:none" target="_blank" rel="noopener">{name}</a>'
+        return (
+            f' &middot; <a href="{url}" style="color:#888;text-decoration:none"'
+            f' target="_blank" rel="noopener">{name}</a>'
+        )
     return f" &middot; {name}"
 
 

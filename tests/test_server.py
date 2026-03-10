@@ -256,7 +256,7 @@ class TestSyncAuthHook:
         @contextmanager
         def auth(request):
             raise ValueError("nope")
-            yield  # noqa: unreachable
+            yield  # noqa: F541
 
         client = _build_client(auth_hook=auth)
         resp = client.post("/tools/echo/call", json={})
@@ -290,7 +290,7 @@ class TestAsyncAuthHook:
         @asynccontextmanager
         async def auth(request):
             raise ValueError("async nope")
-            yield  # noqa: unreachable
+            yield  # noqa: F541
 
         client = _build_client(auth_hook=auth)
         resp = client.post("/tools/echo/call", json={})
@@ -549,7 +549,7 @@ class TestGetEndpointsNoAuth:
             nonlocal call_count
             call_count += 1
             raise ValueError("no auth")
-            yield  # noqa: unreachable
+            yield  # noqa: F541
 
         client = _build_client(auth_hook=counting_auth)
         assert client.get("/").status_code == 200
@@ -640,7 +640,7 @@ class TestAuthErrorNoLeak:
         @contextmanager
         def auth(request):
             raise RuntimeError("DB connection failed at /var/secrets/db.key")
-            yield  # noqa: unreachable
+            yield  # noqa: F541
 
         client = _build_client(auth_hook=auth)
         resp = client.post("/tools/echo/call", json={})

@@ -1,6 +1,6 @@
 # mcp-embedded-ui (Python)
 
-The Python implementation of [mcp-embedded-ui](https://github.com/aipartnerup/mcp-embedded-ui) — a browser-based tool explorer for any [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) server.
+The Python implementation of [mcp-embedded-ui](https://github.com/aiperceivable/mcp-embedded-ui) — a browser-based tool explorer for any [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) server.
 
 ## What is this?
 
@@ -203,11 +203,11 @@ pytest
 
 ## Cross-Language Specification
 
-This package implements the [mcp-embedded-ui](https://github.com/aipartnerup/mcp-embedded-ui) specification. The spec repo contains:
+This package implements the [mcp-embedded-ui](https://github.com/aiperceivable/mcp-embedded-ui) specification. The spec repo contains:
 
-- [PROTOCOL.md](https://github.com/aipartnerup/mcp-embedded-ui/blob/main/docs/PROTOCOL.md) — endpoint spec, data shapes, security checklist
-- [explorer.html](https://github.com/aipartnerup/mcp-embedded-ui/blob/main/docs/explorer.html) — shared HTML template (identical across all language implementations)
-- [Feature specs](https://github.com/aipartnerup/mcp-embedded-ui/blob/main/docs/features/MANIFEST.md) — detailed requirements and test criteria
+- [PROTOCOL.md](https://github.com/aiperceivable/mcp-embedded-ui/blob/main/docs/PROTOCOL.md) — endpoint spec, data shapes, security checklist
+- [explorer.html](https://github.com/aiperceivable/mcp-embedded-ui/blob/main/docs/explorer.html) — shared HTML template (identical across all language implementations)
+- [Feature specs](https://github.com/aiperceivable/mcp-embedded-ui/blob/main/docs/features/MANIFEST.md) — detailed requirements and test criteria
 
 ## License
 

@@ -35,7 +35,7 @@ No build step. No CDN. No external dependencies. The entire UI is a single self-
 pip install mcp-embedded-ui
 ```
 
-Requires Python 3.10+ and [Starlette](https://www.starlette.io/) >= 0.35.
+Requires Python 3.10+ and [Starlette](https://www.starlette.io/) >= 0.14.
 
 ## Quick Start
 

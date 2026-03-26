@@ -40,7 +40,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://aiperceivable.com"
+Homepage = "https://aiperceivable.github.io/mcp-embedded-ui/"
 Documentation = "https://github.com/aiperceivable/mcp-embedded-ui"
 Repository = "https://github.com/aiperceivable/mcp-embedded-ui-python"
 Issues = "https://github.com/aiperceivable/mcp-embedded-ui-python/issues"

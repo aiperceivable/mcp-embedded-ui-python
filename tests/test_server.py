@@ -216,6 +216,142 @@ class TestCallTool:
 
 
 # ---------------------------------------------------------------------------
+# Validate tool — F7
+# ---------------------------------------------------------------------------
+
+class TestValidateTool:
+    def _build(self, **kwargs):
+        schema = {
+            "type": "object",
+            "properties": {
+                "city": {"type": "string"},
+                "count": {"type": "integer"},
+            },
+            "required": ["city"],
+        }
+        tools = [
+            FakeTool("echo", "Echo back", input_schema=schema),
+            FakeTool("noschema", "No schema", input_schema={}),
+        ]
+
+        from mcp_embedded_ui import build_ui_routes
+        routes = build_ui_routes(tools, fake_handler, **kwargs)
+        return TestClient(Mount("/", routes=routes))
+
+    def test_valid_input_returns_valid_true(self):
+        client = self._build()
+        resp = client.post("/tools/echo/validate", json={"city": "Paris"})
+        assert resp.status_code == 200
+        assert resp.json() == {"valid": True}
+
+    def test_missing_required_field(self):
+        client = self._build()
+        resp = client.post("/tools/echo/validate", json={})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["valid"] is False
+        assert any(e["keyword"] == "required" for e in data["errors"])
+
+    def test_wrong_type(self):
+        client = self._build()
+        resp = client.post(
+            "/tools/echo/validate",
+            json={"city": "Paris", "count": "not-int"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["valid"] is False
+        type_errs = [e for e in data["errors"] if e["keyword"] == "type"]
+        assert type_errs, f"expected at least one type error, got {data['errors']}"
+        assert type_errs[0]["path"] == "/count"
+
+    def test_multiple_violations(self):
+        schema = {
+            "type": "object",
+            "properties": {
+                "a": {"type": "integer"},
+                "b": {"type": "integer"},
+            },
+            "required": ["a", "b"],
+        }
+        tools = [FakeTool("multi", "M", input_schema=schema)]
+        from mcp_embedded_ui import build_ui_routes
+        routes = build_ui_routes(tools, fake_handler)
+        client = TestClient(Mount("/", routes=routes))
+        resp = client.post("/tools/multi/validate", json={})
+        data = resp.json()
+        assert data["valid"] is False
+        assert len(data["errors"]) >= 2
+
+    def test_tool_not_found(self):
+        client = self._build()
+        resp = client.post("/tools/nope/validate", json={})
+        assert resp.status_code == 404
+        assert "Tool not found" in resp.json()["error"]
+
+    def test_invalid_json_body_returns_400(self):
+        client = self._build()
+        resp = client.post(
+            "/tools/echo/validate",
+            content=b"not json",
+            headers={"content-type": "application/json"},
+        )
+        assert resp.status_code == 400
+        data = resp.json()
+        assert data["valid"] is False
+        assert data["errors"][0]["keyword"] == "format"
+        assert data["errors"][0]["path"] == ""
+
+    def test_no_input_schema_always_valid(self):
+        client = self._build()
+        resp = client.post("/tools/noschema/validate", json={"anything": 123})
+        assert resp.status_code == 200
+        assert resp.json() == {"valid": True}
+
+    def test_allow_execute_false_does_not_block_validate(self):
+        client = self._build(allow_execute=False)
+        resp = client.post("/tools/echo/validate", json={"city": "Paris"})
+        assert resp.status_code == 200
+        assert resp.json() == {"valid": True}
+
+    def test_auth_hook_not_invoked(self):
+        call_count = 0
+
+        @contextmanager
+        def auth(request):
+            nonlocal call_count
+            call_count += 1
+            raise ValueError("nope")
+            yield  # noqa: F541
+
+        client = self._build(allow_execute=True, auth_hook=auth)
+        resp = client.post("/tools/echo/validate", json={"city": "Paris"})
+        assert resp.status_code == 200
+        assert call_count == 0, f"auth_hook was invoked {call_count} times"
+
+    def test_handler_not_invoked(self):
+        called = {"n": 0}
+
+        async def spy_handler(name, args):
+            called["n"] += 1
+            return [{"type": "text", "text": "should not run"}], False, None
+
+        from mcp_embedded_ui import build_ui_routes
+        tools = [FakeTool("echo", "E")]
+        routes = build_ui_routes(tools, spy_handler, allow_execute=True)
+        client = TestClient(Mount("/", routes=routes))
+        client.post("/tools/echo/validate", json={"msg": "hi"})
+        client.post("/tools/echo/validate", json={"msg": 42})
+        assert called["n"] == 0, "handler should never be invoked from /validate"
+
+    def test_errors_omitted_when_valid(self):
+        client = self._build()
+        resp = client.post("/tools/echo/validate", json={"city": "Paris"})
+        body = resp.json()
+        assert "errors" not in body
+
+
+# ---------------------------------------------------------------------------
 # allow_execute=False
 # ---------------------------------------------------------------------------
 

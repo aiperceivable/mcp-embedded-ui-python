@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-04-28
+
+### Added
+
+- **`POST /tools/{name}/validate` endpoint** — implements F7 from the spec. Validates request args against the tool's `inputSchema` without invoking the handler, returns `{"valid": true}` or `{"valid": false, "errors": [...]}`. Not gated by `allow_execute` or `auth_hook` (per F7 spec). Adds `jsonschema>=4.0.0` dependency.
+- **`explorer.html`** — synced from spec repo; gains the Validate button next to Execute.
+
 ## [0.3.1] - 2026-03-26
 
 ### Changed

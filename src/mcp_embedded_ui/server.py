@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from typing import Any, TypedDict
 
+from jsonschema.validators import Draft202012Validator, validator_for
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
@@ -112,6 +113,27 @@ async def _resolve_tools_by_name(
     return tool_list, by_name
 
 
+def _validate_args(schema: Any, data: Any) -> list[dict[str, Any]]:
+    """Validate ``data`` against a JSON Schema, returning normalized errors.
+
+    Each error is ``{"path": <JSON Pointer>, "message": str, "keyword": str}``.
+    Empty/missing schemas are treated as the always-true schema.
+    """
+    if not schema:
+        return []
+    validator_cls = validator_for(schema, default=Draft202012Validator)
+    errors: list[dict[str, Any]] = []
+    for err in validator_cls(schema).iter_errors(data):
+        parts = [str(p) for p in err.absolute_path]
+        path = "/" + "/".join(parts) if parts else ""
+        errors.append({
+            "path": path,
+            "message": err.message,
+            "keyword": err.validator or "validation",
+        })
+    return errors
+
+
 # ---------------------------------------------------------------------------
 # Route builder (low-level)
 # ---------------------------------------------------------------------------
@@ -161,6 +183,34 @@ def build_ui_routes(
         if tool is None:
             return JSONResponse({"error": f"Tool not found: {name}"}, status_code=404)
         return JSONResponse(_tool_detail(tool))
+
+    async def validate_tool(request: Request) -> Response:
+        name = request.path_params["name"]
+        _, by_name = await _resolve_tools_by_name(tools)
+        tool = by_name.get(name)
+        if tool is None:
+            return JSONResponse({"error": f"Tool not found: {name}"}, status_code=404)
+
+        try:
+            body = await request.json()
+        except Exception as exc:
+            return JSONResponse(
+                {
+                    "valid": False,
+                    "errors": [{
+                        "path": "",
+                        "message": f"Invalid JSON: {exc}",
+                        "keyword": "format",
+                    }],
+                },
+                status_code=400,
+            )
+
+        schema = _make_serializable(getattr(tool, "inputSchema", {})) or {}
+        errors = _validate_args(schema, body)
+        if errors:
+            return JSONResponse({"valid": False, "errors": errors})
+        return JSONResponse({"valid": True})
 
     async def call_tool(request: Request) -> Response:
         if not allow_execute:
@@ -217,6 +267,7 @@ def build_ui_routes(
     return [
         Route("/", endpoint=explorer_page, methods=["GET"]),
         Route("/tools", endpoint=list_tools, methods=["GET"]),
+        Route("/tools/{name:path}/validate", endpoint=validate_tool, methods=["POST"]),
         Route("/tools/{name:path}/call", endpoint=call_tool, methods=["POST"]),
         Route("/tools/{name:path}", endpoint=tool_detail_endpoint, methods=["GET"]),
     ]

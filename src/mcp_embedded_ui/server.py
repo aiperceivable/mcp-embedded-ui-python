@@ -25,10 +25,47 @@ logger = logging.getLogger(__name__)
 # Public types
 # ---------------------------------------------------------------------------
 
-class CallResult(TypedDict):
+class _ValidationFailureRequired(TypedDict):
+    path: str
+    message: str
+
+
+class ValidationFailure(_ValidationFailureRequired, total=False):
+    """A single schema-validation failure from ``POST /tools/{name}/validate``.
+
+    ``path`` is a JSON Pointer (RFC 6901); the root is the empty string.
+    """
+
+    keyword: str
+
+
+class _ValidateResultRequired(TypedDict):
+    valid: bool
+
+
+class ValidateResult(_ValidateResultRequired, total=False):
+    """Response body of ``POST /tools/{name}/validate`` (F7).
+
+    ``errors`` is omitted entirely when the input is valid -- never ``[]``.
+    """
+
+    errors: list[ValidationFailure]
+
+
+class _CallResultRequired(TypedDict):
     content: list[dict[str, Any]]
     isError: bool
-    _meta: dict[str, Any] | None
+
+
+class CallResult(_CallResultRequired, total=False):
+    """Structured response from tool execution.
+
+    ``_meta`` is present only when the handler supplied a non-empty trace id.
+    PROTOCOL.md specifies it is omitted from the payload otherwise, so it is an
+    optional key -- never ``None``.
+    """
+
+    _meta: dict[str, Any]
 
 
 _ToolCallResult = Awaitable[tuple[list[dict[str, Any]], bool, str | None]]
@@ -117,13 +154,21 @@ def _validate_args(schema: Any, data: Any) -> list[dict[str, Any]]:
     """Validate ``data`` against a JSON Schema, returning normalized errors.
 
     Each error is ``{"path": <JSON Pointer>, "message": str, "keyword": str}``.
-    Empty/missing schemas are treated as the always-true schema.
+    Empty/missing schemas are treated as the always-true schema. A schema that
+    cannot itself be compiled is reported as a single ``keyword: "schema"``
+    failure (F7) -- never as a crash, and never as silently valid.
     """
     if not schema:
         return []
-    validator_cls = validator_for(schema, default=Draft202012Validator)
+    try:
+        validator_cls = validator_for(schema, default=Draft202012Validator)
+        # iter_errors is lazy: materialize inside the guard so that a schema
+        # error raised during traversal is caught here too.
+        raw_errors = list(validator_cls(schema).iter_errors(data))
+    except Exception as exc:
+        return [{"path": "", "message": f"Invalid schema: {exc}", "keyword": "schema"}]
     errors: list[dict[str, Any]] = []
-    for err in validator_cls(schema).iter_errors(data):
+    for err in raw_errors:
         parts = [str(p) for p in err.absolute_path]
         path = "/" + "/".join(parts) if parts else ""
         errors.append({

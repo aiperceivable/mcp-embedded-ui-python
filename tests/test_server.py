@@ -121,6 +121,48 @@ class TestProjectLink:
         assert "my-project" in resp.text
         assert "https://github.com/example/my-project" in resp.text
 
+    # -- scheme allow-list (PROTOCOL.md security checklist) ------------------
+    #
+    # HTML escaping alone does not neutralise `javascript:` — that string has
+    # no character an escaper touches. Browsers also ignore TAB/LF/CR and
+    # leading whitespace while resolving a scheme, so those must be stripped
+    # before the check, not after.
+
+    ACCEPTED_URLS = [
+        "https://example.com/x",
+        "http://example.com/x",
+        "HTTPS://example.com/x",
+        "mailto:someone@example.com",
+        "/docs/index.html",
+    ]
+
+    REJECTED_URLS = [
+        "javascript:alert(1)",
+        "JaVaScRiPt:alert(1)",
+        "data:text/html,<script>alert(1)</script>",
+        "vbscript:msgbox(1)",
+        "  javascript:alert(1)",
+        "java\tscript:alert(1)",
+        "java\nscript:alert(1)",
+        "java\rscript:alert(1)",
+    ]
+
+    def test_accepted_schemes_render_an_anchor(self):
+        for url in self.ACCEPTED_URLS:
+            client = _build_client(project_name="proj", project_url=url)
+            text = client.get("/").text
+            footer = text.split("mcp-embedded-ui</a>")[-1]
+            assert "<a href=" in footer, f"{url!r} should render an anchor"
+
+    def test_rejected_schemes_degrade_to_plain_text(self):
+        for url in self.REJECTED_URLS:
+            client = _build_client(project_name="proj", project_url=url)
+            text = client.get("/").text
+            footer = text.split("mcp-embedded-ui</a>")[-1]
+            assert "<a href=" not in footer, f"{url!r} must not become an anchor"
+            assert "proj" in footer, f"{url!r} must still show the project name"
+            assert "javascript" not in footer.lower(), f"{url!r} leaked into the page"
+
     def test_project_name_xss_escaped(self):
         client = _build_client(project_name="<script>alert(1)</script>")
         resp = client.get("/")
@@ -232,11 +274,28 @@ class TestValidateTool:
         tools = [
             FakeTool("echo", "Echo back", input_schema=schema),
             FakeTool("noschema", "No schema", input_schema={}),
+            # A schema that is itself structurally invalid — the validator
+            # cannot be built from it (F7).
+            FakeTool("badschema", "Broken schema", input_schema={"type": "no-such-type"}),
         ]
 
         from mcp_embedded_ui import build_ui_routes
         routes = build_ui_routes(tools, fake_handler, **kwargs)
         return TestClient(Mount("/", routes=routes))
+
+    def test_malformed_schema_reports_schema_error(self):
+        """A schema that cannot be compiled must be reported as a validation
+        failure, not crash the endpoint and not be silently reported valid."""
+        client = self._build()
+        resp = client.post("/tools/badschema/validate", json={"anything": 1})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["valid"] is False
+        assert len(data["errors"]) == 1
+        err = data["errors"][0]
+        assert err["path"] == ""
+        assert err["keyword"] == "schema"
+        assert err["message"].startswith("Invalid schema:")
 
     def test_valid_input_returns_valid_true(self):
         client = self._build()
@@ -431,6 +490,42 @@ class TestAsyncAuthHook:
         client = _build_client(allow_execute=True, auth_hook=auth)
         resp = client.post("/tools/echo/call", json={})
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Validate response types (F7 public type exports)
+# ---------------------------------------------------------------------------
+
+class TestValidateTypeExports:
+    """F7: the /validate response shapes are protocol, not implementation
+    detail — a caller must be able to name what the endpoint returns."""
+
+    def test_importable_from_package_root(self):
+        from mcp_embedded_ui import ValidateResult, ValidationFailure
+
+        assert ValidateResult.__required_keys__ == frozenset({"valid"})
+        assert ValidateResult.__optional_keys__ == frozenset({"errors"})
+        assert ValidationFailure.__required_keys__ == frozenset({"path", "message"})
+        assert ValidationFailure.__optional_keys__ == frozenset({"keyword"})
+
+
+# ---------------------------------------------------------------------------
+# CallResult declared shape
+# ---------------------------------------------------------------------------
+
+class TestCallResultShape:
+    """CallResult must declare the shape it actually emits.
+
+    PROTOCOL.md: ``_meta`` is omitted when trace_id is null/empty, so it is an
+    optional key — declaring it required contradicts every payload this package
+    produces (see TestTraceId below).
+    """
+
+    def test_meta_is_optional(self):
+        from mcp_embedded_ui import CallResult
+
+        assert CallResult.__required_keys__ == frozenset({"content", "isError"})
+        assert CallResult.__optional_keys__ == frozenset({"_meta"})
 
 
 # ---------------------------------------------------------------------------
@@ -731,8 +826,11 @@ class TestPublicExports:
         import mcp_embedded_ui
 
         assert set(mcp_embedded_ui.__all__) == {
+            # F5 framework-integration surface (8 symbols)
             "AuthHook", "CallResult", "ToolCallHandler", "ToolsProvider",
             "build_mcp_ui_routes", "build_ui_routes", "create_app", "create_mount",
+            # F7 validation response shapes
+            "ValidateResult", "ValidationFailure",
         }
 
 
@@ -765,6 +863,50 @@ class TestHtmlTemplateDrift:
             "explorer.html has drifted from spec repo. "
             "Run: cp ../mcp-embedded-ui/docs/explorer.html src/mcp_embedded_ui/explorer.html"
         )
+
+
+# ---------------------------------------------------------------------------
+# Prefill generation — F6/FR-1
+#
+# defaultFromSchema is JavaScript inside explorer.html. Its behaviour is
+# exercised in the TypeScript SDK, which ships the byte-identical template.
+# These assertions guard the same invariant here, and unlike the drift check
+# above they still run when the spec repo is not checked out alongside.
+# ---------------------------------------------------------------------------
+
+class TestPrefillTemplate:
+    @staticmethod
+    def _template():
+        import os
+
+        path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "src", "mcp_embedded_ui", "explorer.html",
+        )
+        with open(os.path.normpath(path), encoding="utf-8") as f:
+            return f.read()
+
+    def test_prefill_reads_required(self):
+        """The prefill must be driven by inputSchema.required."""
+        assert "var required = schema.required;" in self._template(), (
+            "explorer.html prefill no longer reads inputSchema.required (F6/FR-1)"
+        )
+
+    def test_prefill_does_not_fabricate_type_defaults(self):
+        """A fabricated placeholder would satisfy required and the declared
+        type, making the FR-8 Validate button unable to fail on a fresh
+        prefill for any schema."""
+        html = self._template()
+        for fabricated in (
+            "result[key] = '';",
+            "result[key] = 0;",
+            "result[key] = false;",
+            "result[key] = [];",
+            "result[key] = {};",
+        ):
+            assert fabricated not in html, (
+                f"explorer.html fabricates a value again: {fabricated} (F6/FR-1)"
+            )
 
 
 # ---------------------------------------------------------------------------
